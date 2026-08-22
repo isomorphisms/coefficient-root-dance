@@ -1,10 +1,13 @@
 #version 300 es
 precision highp float;
 
+const int COEFFICIENT_COUNT = 2;
+const int ROOT_COUNT = 2;
+
 uniform vec2 u_resolution;
 uniform float u_half_height;
-uniform vec2 u_coefficients[2];
-uniform vec2 u_roots[2];
+uniform vec2 u_coefficients[COEFFICIENT_COUNT];
+uniform vec2 u_roots[ROOT_COUNT];
 uniform int u_active_kind;
 uniform int u_active_index;
 
@@ -66,6 +69,12 @@ float one_digit(vec2 point) {
     return max(stem, max(foot, cap));
 }
 
+bool roots_share_marker(int first, int second) {
+    vec2 first_center = complex_to_screen(u_roots[first], true);
+    vec2 second_center = complex_to_screen(u_roots[second], true);
+    return distance(first_center, second_center) <= 2.0;
+}
+
 void main() {
     vec2 point = gl_FragCoord.xy;
     bool right_side = point.x >= 0.5 * u_resolution.x;
@@ -85,7 +94,7 @@ void main() {
     vec3 coefficient_color = vec3(0.86, 0.34, 0.12);
     vec3 root_color = vec3(0.08, 0.32, 0.72);
 
-    for (int index = 0; index < 2; ++index) {
+    for (int index = 0; index < COEFFICIENT_COUNT; ++index) {
         vec2 center = complex_to_screen(u_coefficients[index], false);
         float handle = circle_mask(point, center, 19.0);
         color = mix(color, coefficient_color, handle);
@@ -102,16 +111,45 @@ void main() {
         color = mix(color, vec3(1.0), digit);
     }
 
-    for (int index = 0; index < 2; ++index) {
+    for (int index = 0; index < ROOT_COUNT; ++index) {
+        bool representative = true;
+        for (int previous = 0; previous < ROOT_COUNT; ++previous) {
+            if (previous < index && roots_share_marker(index, previous)) {
+                representative = false;
+            }
+        }
+        if (!representative) {
+            continue;
+        }
+
+        int multiplicity = 1;
+        bool cluster_active = u_active_kind == 2 && u_active_index == index;
+        for (int other = 0; other < ROOT_COUNT; ++other) {
+            if (other != index && roots_share_marker(index, other)) {
+                multiplicity += 1;
+                if (u_active_kind == 2 && u_active_index == other) {
+                    cluster_active = true;
+                }
+            }
+        }
+
         vec2 center = complex_to_screen(u_roots[index], true);
         float dot = circle_mask(point, center, 12.0);
         color = mix(color, root_color, dot);
 
-        float selection_ring = 0.0;
-        if (u_active_kind == 2 && u_active_index == index) {
-            selection_ring = ring_mask(point, center, 20.0, 2.5);
+        for (int ring_index = 1; ring_index < ROOT_COUNT; ++ring_index) {
+            if (ring_index < multiplicity) {
+                float radius = 12.0 + 7.0 * float(ring_index);
+                float repeated_ring = ring_mask(point, center, radius, 2.25);
+                color = mix(color, root_color, repeated_ring);
+            }
         }
-        color = mix(color, vec3(0.15), selection_ring);
+
+        if (cluster_active) {
+            float active_radius = 20.0 + 7.0 * float(multiplicity - 1);
+            float selection_ring = ring_mask(point, center, active_radius, 2.5);
+            color = mix(color, vec3(0.15), selection_ring);
+        }
     }
 
     out_color = vec4(color, 1.0);
