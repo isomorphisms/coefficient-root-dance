@@ -6,7 +6,7 @@ This branch is stacked on `native-touch-prototype`, because that is where the An
 
 1. Keep the Android `versionCode` and `versionName` source-controlled in `app/build.gradle.kts`.
 2. Run the `F-Droid release build` workflow. It builds `assembleRelease`, checks the package/version and three native ABIs, and retains the unsigned APK as evidence.
-3. Choose and add a FLOSS `LICENSE` file before submission. Replace `CHOOSE-A-FLOSS-SPDX-ID` in the metadata template with its SPDX identifier.
+3. Keep the repository license and F-Droid metadata aligned on `GPL-3.0-or-later`. `THIRD_PARTY.md` records reused and third-party material that is not silently relicensed by that grant.
 4. After the native app lands on the release branch, tag the exact release commit `v<versionName>`.
 5. Replace `FULL_COMMIT_HASH` in `org.isomorphisms.coefficientrootdance.yml.template` with the full hash of that tagged commit.
 6. Copy the template to `fdroiddata/metadata/org.isomorphisms.coefficientrootdance.yml`, run `fdroid lint org.isomorphisms.coefficientrootdance`, then submit the fdroiddata merge request.
