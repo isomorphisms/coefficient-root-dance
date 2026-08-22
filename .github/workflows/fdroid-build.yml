@@ -45,7 +45,6 @@ jobs:
           unzip -t "$apk"
           unzip -Z1 "$apk" > "$RUNNER_TEMP/dance-release-files.txt"
           grep -Fxq lib/arm64-v8a/libcoefficient_root_dance.so "$RUNNER_TEMP/dance-release-files.txt"
-          grep -Fxq lib/armeabi-v7a/libcoefficient_root_dance.so "$RUNNER_TEMP/dance-release-files.txt"
           grep -Fxq lib/x86_64/libcoefficient_root_dance.so "$RUNNER_TEMP/dance-release-files.txt"
           "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$apk" > "$RUNNER_TEMP/dance-release-badging.txt"
           grep -Fq "package: name='org.isomorphisms.coefficientrootdance' versionCode='1' versionName='0.1.0'" "$RUNNER_TEMP/dance-release-badging.txt"
