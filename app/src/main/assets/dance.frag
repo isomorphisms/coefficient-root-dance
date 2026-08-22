@@ -90,11 +90,11 @@ void main() {
         float handle = circle_mask(point, center, 19.0);
         color = mix(color, coefficient_color, handle);
 
-        float active = 0.0;
+        float selection_ring = 0.0;
         if (u_active_kind == 1 && u_active_index == index) {
-            active = ring_mask(point, center, 25.0, 2.5);
+            selection_ring = ring_mask(point, center, 25.0, 2.5);
         }
-        color = mix(color, vec3(0.15), active);
+        color = mix(color, vec3(0.15), selection_ring);
 
         vec2 digit_point = point - center;
         float digit = index == 0 ? zero_digit(digit_point) : one_digit(digit_point);
@@ -107,11 +107,11 @@ void main() {
         float dot = circle_mask(point, center, 12.0);
         color = mix(color, root_color, dot);
 
-        float active = 0.0;
+        float selection_ring = 0.0;
         if (u_active_kind == 2 && u_active_index == index) {
-            active = ring_mask(point, center, 20.0, 2.5);
+            selection_ring = ring_mask(point, center, 20.0, 2.5);
         }
-        color = mix(color, vec3(0.15), active);
+        color = mix(color, vec3(0.15), selection_ring);
     }
 
     out_color = vec4(color, 1.0);
