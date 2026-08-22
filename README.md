@@ -2,22 +2,26 @@
 
 A native Android touch prototype for moving between polynomial coefficients and roots.
 
-The first slice is deliberately small: a **monic quadratic**
+The interaction now uses a runtime-degree **monic polynomial**
 
-`z² + c₁z + c₀`
+`zⁿ + cₙ₋₁zⁿ⁻¹ + ... + c₁z + c₀`
 
-so the two movable coefficient values and the two roots carry the same amount of information.
+with the leading coefficient fixed at `1`. The current mobile slice supports degrees 1 through 12; that bound is a renderer/interaction limit, not part of the polynomial model.
 
 ## Interaction
 
-- Left half: numbered coefficient handles `0` and `1`.
-- Right half: the two root dots.
-- Drag either coefficient handle and both roots update immediately.
-- Drag either root dot and both coefficients update immediately.
-- The leading coefficient is fixed at `1` for this prototype.
-- Repeated roots are shown as concentric circles: a double root is a dot with one surrounding circle.
+- Left half: numbered coefficient handles `0` through `n - 1`.
+- Right half: `n` unnumbered root dots.
+- Drag any coefficient handle and all roots update immediately.
+- Drag any root dot and all coefficients update immediately.
+- `−` and `+` at the top of the coefficient side change the degree; the number between them is the current degree.
+- Increasing the degree multiplies the current polynomial by `z`, adding a root at the origin without disturbing the existing roots.
+- Decreasing the degree removes the root nearest the origin, a geometric rule that does not impose visible root numbering.
+- Repeated roots are shown as concentric circles, one circle per multiplicity level beyond the first dot.
 
-The Android shell uses the same basic `NativeActivity` + `AInputEvent` + EGL/GLES touch/render loop already proven in Wegert. The polynomial conversion is isolated in `polynomial.c`.
+Coefficient-to-root updates use a generic simultaneous root solve and then a minimum-motion assignment against the previous frame so the unnumbered root dots avoid gratuitous swaps while dragging. Root-to-coefficient updates multiply the linear factors directly.
+
+The Android shell uses the same basic `NativeActivity` + `AInputEvent` + EGL/GLES touch/render loop already proven in Wegert. The polynomial conversion remains isolated in `polynomial.c`.
 
 ## Build
 

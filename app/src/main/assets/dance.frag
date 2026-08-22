@@ -1,13 +1,13 @@
 #version 300 es
 precision highp float;
 
-const int COEFFICIENT_COUNT = 2;
-const int ROOT_COUNT = 2;
+const int MAX_POLYNOMIAL_DEGREE = 12;
 
 uniform vec2 u_resolution;
 uniform float u_half_height;
-uniform vec2 u_coefficients[COEFFICIENT_COUNT];
-uniform vec2 u_roots[ROOT_COUNT];
+uniform vec2 u_coefficients[MAX_POLYNOMIAL_DEGREE];
+uniform vec2 u_roots[MAX_POLYNOMIAL_DEGREE];
+uniform int u_degree;
 uniform int u_active_kind;
 uniform int u_active_index;
 
@@ -24,6 +24,60 @@ float circle_mask(vec2 point, vec2 center, float radius) {
 float ring_mask(vec2 point, vec2 center, float radius, float thickness) {
     float ring_distance = abs(distance(point, center) - radius);
     return 1.0 - smoothstep(thickness - 0.75, thickness + 0.75, ring_distance);
+}
+
+float segment_mask(vec2 point, vec2 first, vec2 second, float half_width) {
+    vec2 direction = second - first;
+    float denominator = dot(direction, direction);
+    float amount = clamp(dot(point - first, direction) / denominator, 0.0, 1.0);
+    vec2 nearest = first + amount * direction;
+    return line_mask(distance(point, nearest), half_width);
+}
+
+float digit_mask(int digit, vec2 point) {
+    float top = segment_mask(point, vec2(-5.0, 8.0), vec2(5.0, 8.0), 1.15);
+    float upper_right = segment_mask(point, vec2(5.5, 7.0), vec2(5.5, 0.8), 1.15);
+    float lower_right = segment_mask(point, vec2(5.5, -0.8), vec2(5.5, -7.0), 1.15);
+    float bottom = segment_mask(point, vec2(-5.0, -8.0), vec2(5.0, -8.0), 1.15);
+    float lower_left = segment_mask(point, vec2(-5.5, -0.8), vec2(-5.5, -7.0), 1.15);
+    float upper_left = segment_mask(point, vec2(-5.5, 7.0), vec2(-5.5, 0.8), 1.15);
+    float middle = segment_mask(point, vec2(-5.0, 0.0), vec2(5.0, 0.0), 1.15);
+
+    float result = 0.0;
+    if (digit != 1 && digit != 4) {
+        result = max(result, top);
+    }
+    if (digit != 5 && digit != 6) {
+        result = max(result, upper_right);
+    }
+    if (digit != 2) {
+        result = max(result, lower_right);
+    }
+    if (digit != 1 && digit != 4 && digit != 7) {
+        result = max(result, bottom);
+    }
+    if (digit == 0 || digit == 2 || digit == 6 || digit == 8) {
+        result = max(result, lower_left);
+    }
+    if (digit == 0 || digit == 4 || digit == 5 || digit == 6 || digit == 8 || digit == 9) {
+        result = max(result, upper_left);
+    }
+    if (digit != 0 && digit != 1 && digit != 7) {
+        result = max(result, middle);
+    }
+    return result;
+}
+
+float number_mask(int number, vec2 point) {
+    if (number < 10) {
+        return digit_mask(number, point);
+    }
+
+    int tens = number / 10;
+    int ones = number - 10 * tens;
+    float left = digit_mask(tens, point + vec2(6.5, 0.0));
+    float right = digit_mask(ones, point - vec2(6.5, 0.0));
+    return max(left, right);
 }
 
 vec2 complex_to_screen(vec2 value, bool right_side) {
@@ -52,23 +106,6 @@ vec2 screen_to_complex(vec2 point) {
     );
 }
 
-float zero_digit(vec2 point) {
-    vec2 q = point / vec2(7.0, 10.0);
-    float ellipse = length(q);
-    return 1.0 - smoothstep(0.10, 0.16, abs(ellipse - 0.62));
-}
-
-float one_digit(vec2 point) {
-    float stem = line_mask(abs(point.x), 1.25) *
-                 step(-8.5, point.y) * step(point.y, 8.5);
-    float foot = line_mask(abs(point.y + 8.0), 1.1) *
-                 step(-5.0, point.x) * step(point.x, 5.0);
-    float cap_distance = abs(point.x + point.y * 0.45 + 3.0) / 1.1;
-    float cap = line_mask(cap_distance, 1.0) *
-                step(2.0, point.y) * step(point.y, 8.5);
-    return max(stem, max(foot, cap));
-}
-
 bool roots_share_marker(int first, int second) {
     vec2 first_center = complex_to_screen(u_roots[first], true);
     vec2 second_center = complex_to_screen(u_roots[second], true);
@@ -94,7 +131,11 @@ void main() {
     vec3 coefficient_color = vec3(0.86, 0.34, 0.12);
     vec3 root_color = vec3(0.08, 0.32, 0.72);
 
-    for (int index = 0; index < COEFFICIENT_COUNT; ++index) {
+    for (int index = 0; index < MAX_POLYNOMIAL_DEGREE; ++index) {
+        if (index >= u_degree) {
+            continue;
+        }
+
         vec2 center = complex_to_screen(u_coefficients[index], false);
         float handle = circle_mask(point, center, 19.0);
         color = mix(color, coefficient_color, handle);
@@ -105,15 +146,20 @@ void main() {
         }
         color = mix(color, vec3(0.15), selection_ring);
 
-        vec2 digit_point = point - center;
-        float digit = index == 0 ? zero_digit(digit_point) : one_digit(digit_point);
-        digit *= handle;
+        float digit = number_mask(index, point - center) * handle;
         color = mix(color, vec3(1.0), digit);
     }
 
-    for (int index = 0; index < ROOT_COUNT; ++index) {
+    for (int index = 0; index < MAX_POLYNOMIAL_DEGREE; ++index) {
+        if (index >= u_degree) {
+            continue;
+        }
+
         bool representative = true;
-        for (int previous = 0; previous < ROOT_COUNT; ++previous) {
+        for (int previous = 0; previous < MAX_POLYNOMIAL_DEGREE; ++previous) {
+            if (previous >= u_degree) {
+                continue;
+            }
             if (previous < index && roots_share_marker(index, previous)) {
                 representative = false;
             }
@@ -124,7 +170,10 @@ void main() {
 
         int multiplicity = 1;
         bool cluster_active = u_active_kind == 2 && u_active_index == index;
-        for (int other = 0; other < ROOT_COUNT; ++other) {
+        for (int other = 0; other < MAX_POLYNOMIAL_DEGREE; ++other) {
+            if (other >= u_degree) {
+                continue;
+            }
             if (other != index && roots_share_marker(index, other)) {
                 multiplicity += 1;
                 if (u_active_kind == 2 && u_active_index == other) {
@@ -137,7 +186,7 @@ void main() {
         float dot = circle_mask(point, center, 12.0);
         color = mix(color, root_color, dot);
 
-        for (int ring_index = 1; ring_index < ROOT_COUNT; ++ring_index) {
+        for (int ring_index = 1; ring_index < MAX_POLYNOMIAL_DEGREE; ++ring_index) {
             if (ring_index < multiplicity) {
                 float radius = 12.0 + 7.0 * float(ring_index);
                 float repeated_ring = ring_mask(point, center, radius, 2.25);
@@ -151,6 +200,39 @@ void main() {
             color = mix(color, vec3(0.15), selection_ring);
         }
     }
+
+    float side_width = 0.5 * u_resolution.x;
+    vec2 minus_center = vec2(44.0, u_resolution.y - 44.0);
+    vec2 plus_center = vec2(side_width - 44.0, u_resolution.y - 44.0);
+    vec2 degree_center = vec2(0.5 * side_width, u_resolution.y - 44.0);
+
+    float minus_button = circle_mask(point, minus_center, 24.0);
+    float plus_button = circle_mask(point, plus_center, 24.0);
+    color = mix(color, vec3(0.82), max(minus_button, plus_button));
+
+    float minus_sign = segment_mask(
+        point - minus_center,
+        vec2(-8.0, 0.0),
+        vec2(8.0, 0.0),
+        1.6
+    ) * minus_button;
+    float plus_horizontal = segment_mask(
+        point - plus_center,
+        vec2(-8.0, 0.0),
+        vec2(8.0, 0.0),
+        1.6
+    );
+    float plus_vertical = segment_mask(
+        point - plus_center,
+        vec2(0.0, -8.0),
+        vec2(0.0, 8.0),
+        1.6
+    );
+    float plus_sign = max(plus_horizontal, plus_vertical) * plus_button;
+    color = mix(color, vec3(0.15), max(minus_sign, plus_sign));
+
+    float degree_digit = number_mask(u_degree, point - degree_center);
+    color = mix(color, vec3(0.15), degree_digit);
 
     out_color = vec4(color, 1.0);
 }

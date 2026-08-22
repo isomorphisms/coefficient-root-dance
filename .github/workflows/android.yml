@@ -67,7 +67,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
-      - name: Smoke-test both drag directions and repeated root
+      - name: Smoke-test drag directions, multiplicity, and variable degree
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -100,7 +100,7 @@ jobs:
             grep -q 'drag end kind=1' dance.log
             grep -q 'drag start kind=2' dance.log
             grep -q 'drag end kind=2' dance.log
-            ! grep -Eiq 'shader compilation failed|program link failed|eglInitialize failed|could not choose GLES3 EGL config|could not create EGL surface/context|eglMakeCurrent failed' dance.log
+            ! grep -Eiq 'shader compilation failed|program link failed|eglInitialize failed|could not choose GLES3 EGL config|could not create EGL surface/context|eglMakeCurrent failed|root solve failed' dance.log
             ! cmp -s before.png after.png
 
             # Restart at the known initial polynomial, then move c0 and c1 to zero.
@@ -117,7 +117,24 @@ jobs:
             adb shell pidof -s org.isomorphisms.coefficientrootdance | tr -d '\r' | grep -Eq '^[0-9]+$'
             grep -q 'drag start kind=1' repeated-root.log
             grep -q 'drag end kind=1' repeated-root.log
-            ! grep -Eiq 'shader compilation failed|program link failed|eglInitialize failed|could not choose GLES3 EGL config|could not create EGL surface/context|eglMakeCurrent failed' repeated-root.log
+            ! grep -Eiq 'shader compilation failed|program link failed|eglInitialize failed|could not choose GLES3 EGL config|could not create EGL surface/context|eglMakeCurrent failed|root solve failed' repeated-root.log
+
+            # Restart, raise the polynomial from degree 2 to degree 3, and drag c2.
+            adb shell am force-stop org.isomorphisms.coefficientrootdance
+            adb logcat -c
+            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n org.isomorphisms.coefficientrootdance/android.app.NativeActivity
+            sleep 2
+            adb shell input tap 596 44
+            sleep 1
+            adb shell input swipe 320 383 365 410 350
+            sleep 2
+            adb logcat -d > degree-three.log
+            adb exec-out screencap -p > degree-three.png
+            adb shell pidof -s org.isomorphisms.coefficientrootdance | tr -d '\r' | grep -Eq '^[0-9]+$'
+            grep -q 'degree changed n=3' degree-three.log
+            grep -q 'drag start kind=1 index=2' degree-three.log
+            grep -q 'drag end kind=1 index=2' degree-three.log
+            ! grep -Eiq 'shader compilation failed|program link failed|eglInitialize failed|could not choose GLES3 EGL config|could not create EGL surface/context|eglMakeCurrent failed|root solve failed' degree-three.log
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -129,4 +146,6 @@ jobs:
             after.png
             repeated-root.log
             repeated-root.png
+            degree-three.log
+            degree-three.png
           if-no-files-found: warn

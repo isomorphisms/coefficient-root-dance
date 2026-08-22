@@ -2,33 +2,39 @@
 #define COEFFICIENT_ROOT_DANCE_POLYNOMIAL_H
 
 #include <complex.h>
+#include <stdbool.h>
 
 enum {
-    QUADRATIC_COEFFICIENT_COUNT = 2,
-    QUADRATIC_ROOT_COUNT = 2
+    MIN_POLYNOMIAL_DEGREE = 1,
+    MAX_POLYNOMIAL_DEGREE = 12
 };
 
 /*
- * Monic quadratic:
+ * Monic polynomial of runtime degree n:
  *
- *     z^2 + coefficients[1] z + coefficients[0]
+ *     z^n + coefficients[n - 1] z^(n - 1) + ... + coefficients[0]
  *
- * The leading coefficient is fixed at 1, so two complex coefficient handles
- * and two complex roots contain exactly the same degrees of freedom.
+ * The leading coefficient is fixed at 1.  The active prefixes of roots[] and
+ * coefficients[] each therefore contain exactly n complex degrees of freedom.
  */
 void roots_to_coefficients(
-    const float complex roots[QUADRATIC_ROOT_COUNT],
-    float complex coefficients[QUADRATIC_COEFFICIENT_COUNT]
+    int degree,
+    const float complex roots[MAX_POLYNOMIAL_DEGREE],
+    float complex coefficients[MAX_POLYNOMIAL_DEGREE]
 );
 
 /*
- * Recompute both roots after a coefficient move. roots[] is also the previous
- * root state; the assignment is chosen to minimize total root motion so the
- * two unnumbered root dots do not gratuitously swap identities while dragging.
+ * Recompute the active roots after a coefficient move. roots[] is also the
+ * previous root state.  After solving, a minimum-cost matching keeps each
+ * unnumbered dot as close as possible to its previous position, avoiding
+ * gratuitous root swaps while dragging.
+ *
+ * Returns false for an out-of-range degree or a non-finite numerical solve.
  */
-void coefficients_to_roots(
-    const float complex coefficients[QUADRATIC_COEFFICIENT_COUNT],
-    float complex roots[QUADRATIC_ROOT_COUNT]
+bool coefficients_to_roots(
+    int degree,
+    const float complex coefficients[MAX_POLYNOMIAL_DEGREE],
+    float complex roots[MAX_POLYNOMIAL_DEGREE]
 );
 
 #endif

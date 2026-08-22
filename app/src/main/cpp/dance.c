@@ -27,6 +27,10 @@ static const char *VERTEX_SHADER =
     "    gl_Position = vec4(a_position, 0.0, 1.0);\n"
     "}\n";
 
+static const float DEGREE_BUTTON_X_INSET = 44.0f;
+static const float DEGREE_BUTTON_Y = 44.0f;
+static const float DEGREE_BUTTON_HIT_RADIUS = 38.0f;
+
 enum selection_kind {
     SELECTION_NONE = 0,
     SELECTION_COEFFICIENT = 1,
@@ -49,12 +53,14 @@ struct engine {
     GLint half_height_location;
     GLint coefficients_location;
     GLint roots_location;
+    GLint degree_location;
     GLint active_kind_location;
     GLint active_index_location;
 
     float half_height;
-    float complex coefficients[QUADRATIC_COEFFICIENT_COUNT];
-    float complex roots[QUADRATIC_ROOT_COUNT];
+    int degree;
+    float complex coefficients[MAX_POLYNOMIAL_DEGREE];
+    float complex roots[MAX_POLYNOMIAL_DEGREE];
 
     enum selection_kind active_kind;
     int active_index;
@@ -64,9 +70,20 @@ struct engine {
 
 static void reset_polynomial(struct engine *engine) {
     engine->half_height = 3.2f;
+    engine->degree = 2;
+
+    for (int index = 0; index < MAX_POLYNOMIAL_DEGREE; ++index) {
+        engine->roots[index] = 0.0f + 0.0f * I;
+        engine->coefficients[index] = 0.0f + 0.0f * I;
+    }
+
     engine->roots[0] = -1.0f + 0.6f * I;
     engine->roots[1] =  1.0f - 0.4f * I;
-    roots_to_coefficients(engine->roots, engine->coefficients);
+    roots_to_coefficients(
+        engine->degree,
+        engine->roots,
+        engine->coefficients
+    );
     engine->active_kind = SELECTION_NONE;
     engine->active_index = -1;
     engine->dirty = true;
@@ -198,6 +215,8 @@ static bool create_renderer(struct engine *engine) {
         glGetUniformLocation(engine->program, "u_coefficients[0]");
     engine->roots_location =
         glGetUniformLocation(engine->program, "u_roots[0]");
+    engine->degree_location =
+        glGetUniformLocation(engine->program, "u_degree");
     engine->active_kind_location =
         glGetUniformLocation(engine->program, "u_active_kind");
     engine->active_index_location =
@@ -377,14 +396,12 @@ static void draw_frame(struct engine *engine) {
         return;
     }
 
-    GLfloat coefficient_pairs[QUADRATIC_COEFFICIENT_COUNT * 2];
-    GLfloat root_pairs[QUADRATIC_ROOT_COUNT * 2];
+    GLfloat coefficient_pairs[MAX_POLYNOMIAL_DEGREE * 2] = {0};
+    GLfloat root_pairs[MAX_POLYNOMIAL_DEGREE * 2] = {0};
 
-    for (int index = 0; index < QUADRATIC_COEFFICIENT_COUNT; ++index) {
+    for (int index = 0; index < engine->degree; ++index) {
         coefficient_pairs[2 * index] = crealf(engine->coefficients[index]);
         coefficient_pairs[2 * index + 1] = cimagf(engine->coefficients[index]);
-    }
-    for (int index = 0; index < QUADRATIC_ROOT_COUNT; ++index) {
         root_pairs[2 * index] = crealf(engine->roots[index]);
         root_pairs[2 * index + 1] = cimagf(engine->roots[index]);
     }
@@ -398,14 +415,15 @@ static void draw_frame(struct engine *engine) {
     glUniform1f(engine->half_height_location, engine->half_height);
     glUniform2fv(
         engine->coefficients_location,
-        QUADRATIC_COEFFICIENT_COUNT,
+        MAX_POLYNOMIAL_DEGREE,
         coefficient_pairs
     );
     glUniform2fv(
         engine->roots_location,
-        QUADRATIC_ROOT_COUNT,
+        MAX_POLYNOMIAL_DEGREE,
         root_pairs
     );
+    glUniform1i(engine->degree_location, engine->degree);
     glUniform1i(engine->active_kind_location, (int)engine->active_kind);
     glUniform1i(engine->active_index_location, engine->active_index);
 
@@ -473,12 +491,7 @@ static int nearest_handle(
     int best_index = -1;
     bool right_side = kind == SELECTION_ROOT;
 
-    int count =
-        kind == SELECTION_ROOT ?
-        QUADRATIC_ROOT_COUNT :
-        QUADRATIC_COEFFICIENT_COUNT;
-
-    for (int index = 0; index < count; ++index) {
+    for (int index = 0; index < engine->degree; ++index) {
         float complex value =
             kind == SELECTION_ROOT ?
             engine->roots[index] :
@@ -506,20 +519,97 @@ static int nearest_handle(
     return best_index;
 }
 
+static int degree_button_delta(
+    const struct engine *engine,
+    float x,
+    float y
+) {
+    if (engine->width <= 0) {
+        return 0;
+    }
+
+    float side_width = 0.5f * (float)engine->width;
+    float radius_squared =
+        DEGREE_BUTTON_HIT_RADIUS * DEGREE_BUTTON_HIT_RADIUS;
+    float y_difference = y - DEGREE_BUTTON_Y;
+
+    float minus_difference = x - DEGREE_BUTTON_X_INSET;
+    if (minus_difference * minus_difference + y_difference * y_difference <=
+        radius_squared) {
+        return -1;
+    }
+
+    float plus_difference = x - (side_width - DEGREE_BUTTON_X_INSET);
+    if (plus_difference * plus_difference + y_difference * y_difference <=
+        radius_squared) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static void change_degree(struct engine *engine, int delta) {
+    if (delta > 0 && engine->degree < MAX_POLYNOMIAL_DEGREE) {
+        engine->roots[engine->degree] = 0.0f + 0.0f * I;
+        engine->degree += 1;
+    } else if (delta < 0 && engine->degree > MIN_POLYNOMIAL_DEGREE) {
+        int removed_index = 0;
+        float removed_distance = cabsf(engine->roots[0]);
+        for (int index = 1; index < engine->degree; ++index) {
+            float distance = cabsf(engine->roots[index]);
+            if (distance < removed_distance) {
+                removed_distance = distance;
+                removed_index = index;
+            }
+        }
+
+        for (int index = removed_index; index + 1 < engine->degree; ++index) {
+            engine->roots[index] = engine->roots[index + 1];
+        }
+        engine->roots[engine->degree - 1] = 0.0f + 0.0f * I;
+        engine->degree -= 1;
+    } else {
+        return;
+    }
+
+    roots_to_coefficients(
+        engine->degree,
+        engine->roots,
+        engine->coefficients
+    );
+    engine->active_kind = SELECTION_NONE;
+    engine->active_index = -1;
+    engine->dirty = true;
+    LOGI("degree changed n=%d", engine->degree);
+}
+
 static void move_active_handle(
     struct engine *engine,
     float x,
     float y
 ) {
     if (engine->active_kind == SELECTION_COEFFICIENT) {
+        float complex previous = engine->coefficients[engine->active_index];
         float complex value = screen_to_complex(engine, x, y, false);
         engine->coefficients[engine->active_index] = value;
-        coefficients_to_roots(engine->coefficients, engine->roots);
+        if (!coefficients_to_roots(
+                engine->degree,
+                engine->coefficients,
+                engine->roots
+            )) {
+            engine->coefficients[engine->active_index] = previous;
+            LOGE("root solve failed at degree %d", engine->degree);
+            return;
+        }
         engine->dirty = true;
     } else if (engine->active_kind == SELECTION_ROOT) {
         float complex value = screen_to_complex(engine, x, y, true);
         engine->roots[engine->active_index] = value;
-        roots_to_coefficients(engine->roots, engine->coefficients);
+        roots_to_coefficients(
+            engine->degree,
+            engine->roots,
+            engine->coefficients
+        );
         engine->dirty = true;
     }
 }
@@ -537,6 +627,12 @@ static int32_t handle_input(struct android_app *app, AInputEvent *event) {
 
     switch (masked_action) {
         case AMOTION_EVENT_ACTION_DOWN: {
+            int degree_delta = degree_button_delta(engine, x, y);
+            if (degree_delta != 0) {
+                change_degree(engine, degree_delta);
+                return 1;
+            }
+
             enum selection_kind kind =
                 x < 0.5f * (float)engine->width ?
                 SELECTION_COEFFICIENT :
