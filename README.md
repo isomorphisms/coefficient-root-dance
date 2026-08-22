@@ -15,7 +15,7 @@ so the two movable coefficient values and the two roots carry the same amount of
 - Drag either coefficient handle and both roots update immediately.
 - Drag either root dot and both coefficients update immediately.
 - The leading coefficient is fixed at `1` for this prototype.
-- Repeated-root decoration is intentionally deferred; coincident roots simply overlap.
+- Repeated roots are shown as concentric circles: a double root is a dot with one surrounding circle.
 
 The Android shell uses the same basic `NativeActivity` + `AInputEvent` + EGL/GLES touch/render loop already proven in Wegert. The polynomial conversion is isolated in `polynomial.c`.
 
