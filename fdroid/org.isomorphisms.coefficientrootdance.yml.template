@@ -1,0 +1,21 @@
+Categories:
+  - Science & Education
+License: CHOOSE-A-FLOSS-SPDX-ID
+SourceCode: https://github.com/isomorphisms/coefficient-root-dance
+IssueTracker: https://github.com/isomorphisms/coefficient-root-dance/issues
+
+RepoType: git
+Repo: https://github.com/isomorphisms/coefficient-root-dance.git
+
+Builds:
+  - versionName: 0.1.0
+    versionCode: 1
+    commit: FULL_COMMIT_HASH
+    ndk: 29.0.14206865
+    gradle:
+      - yes
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9]+\.[0-9]+\.[0-9]+$
+CurrentVersion: 0.1.0
+CurrentVersionCode: 1
