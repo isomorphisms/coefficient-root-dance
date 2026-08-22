@@ -82,10 +82,7 @@ jobs:
             adb shell wm density 320
             adb install -r artifacts/app-debug.apk
             adb logcat -c
-            adb shell am start -W \
-              -a android.intent.action.MAIN \
-              -c android.intent.category.LAUNCHER \
-              -n org.isomorphisms.coefficientrootdance/android.app.NativeActivity
+            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n org.isomorphisms.coefficientrootdance/android.app.NativeActivity
             sleep 3
 
             adb exec-out screencap -p > before.png
