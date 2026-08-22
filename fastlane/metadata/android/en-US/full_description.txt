@@ -1,0 +1,5 @@
+Coefficient Root Dance is an interactive native Android explorer for monic polynomials.
+
+The left side shows numbered coefficient handles and the right side shows unnumbered roots. Drag any coefficient and the roots update immediately; drag any root and the coefficients update immediately. Increase or decrease the degree while keeping the two representations synchronized.
+
+The current mobile interface supports degrees 1 through 12 and marks repeated roots with concentric circles.
