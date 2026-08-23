@@ -78,11 +78,32 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot-save -no-metrics
           script: |
+            package=org.isomorphisms.coefficientrootdance
+            component="$package/android.app.NativeActivity"
+
+            restart_app() {
+              adb shell am force-stop "$package"
+              for attempt in $(seq 1 20); do
+                if ! adb shell pidof -s "$package" >/dev/null 2>&1; then
+                  break
+                fi
+                sleep 0.25
+              done
+
+              # Let the old NativeActivity window/input channel finish tearing down.
+              sleep 1
+              adb logcat -c
+              adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$component"
+
+              # NativeActivity can report started before its input queue is attached.
+              sleep 3
+            }
+
             adb shell wm size 1280x720
             adb shell wm density 320
             adb install -r artifacts/app-debug.apk
             adb logcat -c
-            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n org.isomorphisms.coefficientrootdance/android.app.NativeActivity
+            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$component"
             sleep 3
 
             adb exec-out screencap -p > before.png
@@ -95,7 +116,7 @@ jobs:
 
             adb logcat -d > dance.log
             adb exec-out screencap -p > after.png
-            adb shell pidof -s org.isomorphisms.coefficientrootdance | tr -d '\r' | grep -Eq '^[0-9]+$'
+            adb shell pidof -s "$package" | tr -d '\r' | grep -Eq '^[0-9]+$'
             grep -q 'drag start kind=1' dance.log
             grep -q 'drag end kind=1' dance.log
             grep -q 'drag start kind=2' dance.log
@@ -105,32 +126,26 @@ jobs:
 
             # Restart at the known initial polynomial, then move c0 and c1 to zero.
             # z^2 then has a double root at zero, which should draw concentric circles.
-            adb shell am force-stop org.isomorphisms.coefficientrootdance
-            adb logcat -c
-            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n org.isomorphisms.coefficientrootdance/android.app.NativeActivity
-            sleep 2
+            restart_app
             adb shell input swipe 235 248 320 360 350
             adb shell input swipe 320 383 320 360 350
             sleep 2
             adb logcat -d > repeated-root.log
             adb exec-out screencap -p > repeated-root.png
-            adb shell pidof -s org.isomorphisms.coefficientrootdance | tr -d '\r' | grep -Eq '^[0-9]+$'
+            adb shell pidof -s "$package" | tr -d '\r' | grep -Eq '^[0-9]+$'
             grep -q 'drag start kind=1' repeated-root.log
             grep -q 'drag end kind=1' repeated-root.log
             ! grep -Eiq 'shader compilation failed|program link failed|eglInitialize failed|could not choose GLES3 EGL config|could not create EGL surface/context|eglMakeCurrent failed|root solve failed' repeated-root.log
 
             # Restart, raise the polynomial from degree 2 to degree 3, and drag c2.
-            adb shell am force-stop org.isomorphisms.coefficientrootdance
-            adb logcat -c
-            adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n org.isomorphisms.coefficientrootdance/android.app.NativeActivity
-            sleep 2
+            restart_app
             adb shell input tap 596 44
             sleep 1
             adb shell input swipe 320 383 365 410 350
             sleep 2
             adb logcat -d > degree-three.log
             adb exec-out screencap -p > degree-three.png
-            adb shell pidof -s org.isomorphisms.coefficientrootdance | tr -d '\r' | grep -Eq '^[0-9]+$'
+            adb shell pidof -s "$package" | tr -d '\r' | grep -Eq '^[0-9]+$'
             grep -q 'degree changed n=3' degree-three.log
             grep -q 'drag start kind=1 index=2' degree-three.log
             grep -q 'drag end kind=1 index=2' degree-three.log
