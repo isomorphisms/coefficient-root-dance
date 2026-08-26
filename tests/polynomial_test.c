@@ -28,6 +28,92 @@ static void check_round_trip(
     }
 }
 
+static void check_single_root_exchange_loop(void) {
+    enum { LOOP_STEPS = 64 };
+    const float tau = 6.2831853071795864769f;
+    const float root_tolerance = 2.0e-3f;
+    const float continuity_bound = 0.2f;
+
+    /* Coarse polynomial state: p_theta(z) = z^2 - exp(i theta). */
+    float complex coefficient_path[LOOP_STEPS + 1][MAX_POLYNOMIAL_DEGREE] = {{0}};
+
+    /* Path evidence: root slots are meaningful only because they are tracked. */
+    float complex tracked_root_path[LOOP_STEPS + 1][MAX_POLYNOMIAL_DEGREE] = {{0}};
+    const float complex initial_roots[2] = {
+         1.0f + 0.0f * I,
+        -1.0f + 0.0f * I
+    };
+
+    coefficient_path[0][0] = -1.0f + 0.0f * I;
+    coefficient_path[0][1] =  0.0f + 0.0f * I;
+    tracked_root_path[0][0] = initial_roots[0];
+    tracked_root_path[0][1] = initial_roots[1];
+
+    for (int step = 1; step <= LOOP_STEPS; ++step) {
+        if (step == LOOP_STEPS) {
+            /* Close the sampled coefficient loop exactly, not just numerically. */
+            coefficient_path[step][0] = coefficient_path[0][0];
+            coefficient_path[step][1] = coefficient_path[0][1];
+        } else {
+            float theta = tau * (float)step / (float)LOOP_STEPS;
+            coefficient_path[step][0] =
+                -cosf(theta) - sinf(theta) * I;
+            coefficient_path[step][1] = 0.0f + 0.0f * I;
+        }
+
+        for (int root_index = 0; root_index < 2; ++root_index) {
+            tracked_root_path[step][root_index] =
+                tracked_root_path[step - 1][root_index];
+        }
+
+        assert(coefficients_to_roots(
+            2,
+            coefficient_path[step],
+            tracked_root_path[step]
+        ));
+
+        for (int root_index = 0; root_index < 2; ++root_index) {
+            assert(cabsf(
+                tracked_root_path[step][root_index] -
+                tracked_root_path[step - 1][root_index]
+            ) < continuity_bound);
+        }
+    }
+
+    assert(coefficient_path[LOOP_STEPS][0] == coefficient_path[0][0]);
+    assert(coefficient_path[LOOP_STEPS][1] == coefficient_path[0][1]);
+
+    /* The exchanged tracked ordering still represents the same polynomial. */
+    float complex reconstructed[MAX_POLYNOMIAL_DEGREE] = {0};
+    roots_to_coefficients(2, tracked_root_path[LOOP_STEPS], reconstructed);
+    assert(close_complex(reconstructed[0], coefficient_path[0][0], 2.0e-4f));
+    assert(close_complex(reconstructed[1], coefficient_path[0][1], 2.0e-4f));
+
+    /* permutation[tracked slot] = initial root occupying its final position. */
+    int permutation[2] = {-1, -1};
+    for (int tracked_index = 0; tracked_index < 2; ++tracked_index) {
+        for (int initial_index = 0; initial_index < 2; ++initial_index) {
+            if (close_complex(
+                tracked_root_path[LOOP_STEPS][tracked_index],
+                initial_roots[initial_index],
+                root_tolerance
+            )) {
+                assert(permutation[tracked_index] == -1);
+                permutation[tracked_index] = initial_index;
+            }
+        }
+        assert(permutation[tracked_index] >= 0);
+    }
+
+    assert(permutation[0] == 1);
+    assert(permutation[1] == 0);
+    printf(
+        "single-loop tracked-root permutation: [%d, %d] (transposition)\n",
+        permutation[0],
+        permutation[1]
+    );
+}
+
 int main(void) {
     float complex quadratic[MAX_POLYNOMIAL_DEGREE] = {
         -1.0f + 0.6f * I,
@@ -101,6 +187,8 @@ int main(void) {
     assert(cabsf(moving[0] - previous_zero) < cabsf(moving[0] - previous_two));
     assert(cabsf(moving[1] - previous_one) < cabsf(moving[1] - previous_zero));
     assert(cabsf(moving[2] - previous_two) < cabsf(moving[2] - previous_zero));
+
+    check_single_root_exchange_loop();
 
     puts("variable-degree polynomial conversion checks passed");
     return 0;
